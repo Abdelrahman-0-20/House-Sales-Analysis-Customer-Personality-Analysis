@@ -21,8 +21,3 @@ The app expects two CSV files in the same directory. You can also import your ow
 
 1. `marketing_campaign.csv` – tab‑separated customer data (from [Kaggle](https://www.kaggle.com/datasets/rodsaldanha/arketing-campaign))
 2. `kc_house_data.csv` – King County house sales (from [Kaggle](https://www.kaggle.com/datasets/harlfoxem/housesalesprediction))
-
-
-- pip
-
-### Installation
