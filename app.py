@@ -212,11 +212,11 @@ def house_dashboard():
         fig.update_layout(template="simple_white")
         st.plotly_chart(fig, use_container_width=True)
 
-    # Map (static)
+    # Map (fixed: explicitly pass lat/lon column names)
     if 'lat' in filtered.columns and 'long' in filtered.columns:
         st.subheader("🗺️ Property Locations")
         map_data = filtered.dropna(subset=['lat','long']).sample(min(2000, len(filtered)))
-        st.map(map_data[['lat','long']])
+        st.map(map_data, latitude='lat', longitude='long')   # ← corrected
 
     # Export
     st.download_button("📥 Download Filtered Data", filtered.to_csv(index=False), "houses_filtered.csv")
