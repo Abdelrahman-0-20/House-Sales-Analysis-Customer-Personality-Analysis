@@ -93,6 +93,9 @@ def load_customer():
         # Calculate days since last purchase
         df['Last_Purchase_Days'] = df['Recency']
         
+        # Calculate spending ratio (spending vs income)
+        df['Spending_Ratio'] = (df['TotalSpent'] / df['Income'] * 100).clip(0, 100)
+        
         return df
     except Exception as e:
         st.error(f"Error loading customer data: {str(e)}")
@@ -118,29 +121,12 @@ def load_houses():
         # Price category
         df['price_category'] = pd.qcut(df['price'], q=5, labels=['Budget', 'Economic', 'Mid-Range', 'Premium', 'Luxury'])
         
+        # Calculate total rooms
+        df['total_rooms'] = df['bedrooms'] + df['bathrooms']
+        
         return df
     except Exception as e:
         st.error(f"Error loading house data: {str(e)}")
-        return pd.DataFrame()
-
-@st.cache_data(ttl=3600)
-def load_olympics():
-    """Load and preprocess olympics data"""
-    try:
-        df = pd.read_csv("athlete_events.csv")
-        
-        # Calculate additional metrics
-        df['Total_Medals'] = df['Medal'].notna().astype(int)
-        df['Gold'] = (df['Medal'] == 'Gold').astype(int)
-        df['Silver'] = (df['Medal'] == 'Silver').astype(int)
-        df['Bronze'] = (df['Medal'] == 'Bronze').astype(int)
-        
-        # Calculate BMI if Height and Weight are available
-        df['BMI'] = df['Weight'] / ((df['Height'] / 100) ** 2)
-        
-        return df
-    except Exception as e:
-        st.error(f"Error loading olympics data: {str(e)}")
         return pd.DataFrame()
 
 # ------------------------------------------------------------
@@ -171,263 +157,6 @@ def create_download_button(df, filename, button_text="📥 Download Data"):
         file_name=filename,
         mime='text/csv'
     )
-
-# ------------------------------------------------------------
-# OLYMPICS DASHBOARD - ENHANCED
-# ------------------------------------------------------------
-def olympics_dashboard():
-    st.markdown('<h1 class="main-header">🏅 Olympic Games Analytics</h1>', unsafe_allow_html=True)
-    
-    df = load_olympics()
-    if df.empty:
-        return
-    
-    # Advanced Filters in a container
-    with st.container():
-        st.markdown('<div class="filter-container">', unsafe_allow_html=True)
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            seasons = st.multiselect(
-                "🌍 Season",
-                df['Season'].unique(),
-                default=df['Season'].unique()
-            )
-        
-        with col2:
-            years = st.slider(
-                "📅 Year Range",
-                int(df['Year'].min()),
-                int(df['Year'].max()),
-                (1960, 2016)
-            )
-        
-        with col3:
-            sports = st.multiselect(
-                "🏃 Sport",
-                df['Sport'].unique(),
-                default=df['Sport'].unique()[:5]
-            )
-        
-        with col4:
-            medal_types = st.multiselect(
-                "🥇 Medal Type",
-                ['Gold', 'Silver', 'Bronze'],
-                default=['Gold', 'Silver', 'Bronze']
-            )
-        
-        # Advanced filters row 2
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            countries = st.multiselect(
-                "🏳️ Countries (Top N)",
-                df['NOC'].unique(),
-                default=df['NOC'].value_counts().head(10).index.tolist()
-            )
-        
-        with col2:
-            sex_filter = st.multiselect(
-                "⚥ Gender",
-                df['Sex'].unique(),
-                default=df['Sex'].unique()
-            )
-        
-        with col3:
-            if st.button("🔄 Reset Filters", key="reset_olympics"):
-                st.rerun()
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Apply filters
-    filtered = df[
-        (df['Season'].isin(seasons)) &
-        (df['Year'].between(years[0], years[1])) &
-        (df['Sport'].isin(sports)) &
-        (df['Sex'].isin(sex_filter)) &
-        (df['NOC'].isin(countries))
-    ]
-    
-    if medal_types:
-        filtered = filtered[filtered['Medal'].isin(medal_types) | filtered['Medal'].isna()]
-    
-    # Key Metrics Row
-    st.markdown("### 📈 Key Performance Indicators")
-    metric_cols = st.columns(4)
-    
-    with metric_cols[0]:
-        total_athletes = filtered['ID'].nunique()
-        st.markdown(create_metric_card("Total Athletes", total_athletes, suffix="+"), unsafe_allow_html=True)
-    
-    with metric_cols[1]:
-        total_medals = filtered['Medal'].notna().sum()
-        st.markdown(create_metric_card("Total Medals", total_medals), unsafe_allow_html=True)
-    
-    with metric_cols[2]:
-        total_countries = filtered['NOC'].nunique()
-        st.markdown(create_metric_card("Countries", total_countries), unsafe_allow_html=True)
-    
-    with metric_cols[3]:
-        avg_age = filtered['Age'].mean()
-        st.markdown(create_metric_card("Avg Age", avg_age, suffix=" yrs"), unsafe_allow_html=True)
-    
-    # Charts Section
-    st.markdown("### 📊 Analytics & Insights")
-    
-    # Row 1: Top Countries and Athletes
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        with st.container():
-            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            
-            # Enhanced medal chart with medal types
-            medals_by_country = filtered[filtered['Medal'].notna()].groupby(['NOC', 'Medal']).size().unstack(fill_value=0)
-            medals_by_country['Total'] = medals_by_country.sum(axis=1)
-            top_countries = medals_by_country.nlargest(10, 'Total')
-            
-            fig = go.Figure(data=[
-                go.Bar(name='Gold', x=top_countries.index, y=top_countries.get('Gold', 0), marker_color='#FFD700'),
-                go.Bar(name='Silver', x=top_countries.index, y=top_countries.get('Silver', 0), marker_color='#C0C0C0'),
-                go.Bar(name='Bronze', x=top_countries.index, y=top_countries.get('Bronze', 0), marker_color='#CD7F32')
-            ])
-            
-            fig.update_layout(
-                title="Top 10 Countries - Medal Distribution",
-                barmode='stack',
-                xaxis_title="Country",
-                yaxis_title="Number of Medals",
-                template="plotly_white",
-                hovermode='x unified'
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-    
-    with col2:
-        with st.container():
-            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            
-            # Top athletes with horizontal bar
-            top_athletes = filtered[filtered['Medal'].notna()].groupby('Name')['Medal'].count().nlargest(10)
-            
-            fig = px.bar(
-                top_athletes,
-                orientation='h',
-                title="Top 10 Athletes by Medal Count",
-                labels={'value': 'Medals', 'Name': 'Athlete'},
-                color=top_athletes.values,
-                color_continuous_scale='Viridis'
-            )
-            
-            fig.update_layout(showlegend=False, template="plotly_white")
-            st.plotly_chart(fig, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Row 2: Trends and Correlations
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        with st.container():
-            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            
-            # Athletes trend with gender breakdown
-            athletes_trend = filtered.groupby(['Year', 'Sex'])['ID'].nunique().reset_index()
-            
-            fig = px.area(
-                athletes_trend,
-                x='Year',
-                y='ID',
-                color='Sex',
-                title="Athlete Participation Over Time by Gender",
-                labels={'ID': 'Number of Athletes', 'Year': 'Year'},
-                template="plotly_white"
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-    
-    with col2:
-        with st.container():
-            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            
-            # BMI distribution by sport
-            bmi_data = filtered.dropna(subset=['BMI'])
-            if not bmi_data.empty:
-                top_sports = bmi_data['Sport'].value_counts().head(5).index
-                bmi_sport = bmi_data[bmi_data['Sport'].isin(top_sports)]
-                
-                fig = px.box(
-                    bmi_sport,
-                    x='Sport',
-                    y='BMI',
-                    title="BMI Distribution by Top Sports",
-                    template="plotly_white",
-                    color='Sport'
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("No BMI data available")
-            st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Row 3: Additional Analytics
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        
-        # Age distribution
-        fig = px.histogram(
-            filtered.dropna(subset=['Age']),
-            x='Age',
-            nbins=30,
-            title="Age Distribution of Athletes",
-            template="plotly_white",
-            marginal='box'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        
-        # Height distribution
-        fig = px.histogram(
-            filtered.dropna(subset=['Height']),
-            x='Height',
-            nbins=30,
-            title="Height Distribution",
-            template="plotly_white",
-            color='Sex'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        
-        # Weight distribution
-        fig = px.histogram(
-            filtered.dropna(subset=['Weight']),
-            x='Weight',
-            nbins=30,
-            title="Weight Distribution",
-            template="plotly_white",
-            color='Sex'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Download Section
-    st.markdown("### 📥 Export Data")
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        create_download_button(filtered, "olympics_data.csv")
-    with col2:
-        st.metric("Filtered Records", len(filtered))
-    with col3:
-        st.metric("Total Records", len(df))
 
 # ------------------------------------------------------------
 # CUSTOMER PERSONALITY DASHBOARD - ENHANCED
@@ -475,8 +204,28 @@ def customer_dashboard():
                 default=df['Spending_Segment'].unique()
             )
         
-        if st.button("🔄 Reset Filters", key="reset_customer"):
-            st.rerun()
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            age_range = st.slider(
+                "👤 Age Range",
+                int(df['Age'].min()) if 'Age' in df.columns else 18,
+                int(df['Age'].max()) if 'Age' in df.columns else 100,
+                (25, 65)
+            )
+        
+        with col2:
+            if 'Kidhome' in df.columns:
+                kids = st.multiselect(
+                    "👶 Kids at Home",
+                    df['Kidhome'].unique(),
+                    default=df['Kidhome'].unique()
+                )
+            else:
+                kids = [0, 1, 2]
+        
+        with col3:
+            if st.button("🔄 Reset Filters", key="reset_customer"):
+                st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -488,9 +237,15 @@ def customer_dashboard():
         (df['Spending_Segment'].isin(spending_segment))
     ]
     
+    if 'Age' in filtered.columns:
+        filtered = filtered[filtered['Age'].between(age_range[0], age_range[1])]
+    
+    if 'Kidhome' in filtered.columns:
+        filtered = filtered[filtered['Kidhome'].isin(kids)]
+    
     # KPI Cards
     st.markdown("### 📈 Customer Insights")
-    metric_cols = st.columns(4)
+    metric_cols = st.columns(5)
     
     with metric_cols[0]:
         avg_income = filtered['Income'].mean()
@@ -508,6 +263,10 @@ def customer_dashboard():
         conversion_rate = (filtered['Response'] == 1).mean() * 100 if 'Response' in filtered.columns else 0
         st.markdown(create_metric_card("Campaign Response Rate", conversion_rate, suffix="%"), unsafe_allow_html=True)
     
+    with metric_cols[4]:
+        total_customers = len(filtered)
+        st.markdown(create_metric_card("Active Customers", total_customers), unsafe_allow_html=True)
+    
     # Charts Section
     col1, col2 = st.columns(2)
     
@@ -521,10 +280,11 @@ def customer_dashboard():
             y='TotalSpent',
             color='Education',
             size='Recency',
-            hover_data=['Age', 'Marital_Status'],
+            hover_data=['Age', 'Marital_Status', 'Spending_Segment'],
             title="Income vs Total Spending Analysis",
             trendline="ols",
-            template="plotly_white"
+            template="plotly_white",
+            opacity=0.7
         )
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -542,11 +302,13 @@ def customer_dashboard():
             y=spending_avg.index,
             orientation='h',
             title="Average Spending by Product Category",
-            labels={'x': 'Average Amount ($)', 'y': 'Product'},
+            labels={'x': 'Average Amount ($)', 'y': 'Product Category'},
             color=spending_avg.values,
             color_continuous_scale='Blues',
-            template="plotly_white"
+            template="plotly_white",
+            text=spending_avg.values.round(0)
         )
+        fig.update_traces(texttemplate='$%{text:,.0f}', textposition='outside')
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -557,19 +319,27 @@ def customer_dashboard():
         st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         
         # Customer lifetime value by segment
-        clv_by_segment = filtered.groupby('Spending_Segment')['CLV_Score'].agg(['mean', 'count']).reset_index()
+        clv_by_segment = filtered.groupby('Spending_Segment').agg({
+            'CLV_Score': ['mean', 'std'],
+            'ID': 'count'
+        }).round(2)
+        clv_by_segment.columns = ['Avg_CLV', 'Std_CLV', 'Count']
+        clv_by_segment = clv_by_segment.reset_index()
         
         fig = make_subplots(specs=[[{"secondary_y": True}]])
         
         fig.add_trace(
             go.Bar(name="Customer Count", x=clv_by_segment['Spending_Segment'], 
-                   y=clv_by_segment['count'], marker_color='lightblue'),
+                   y=clv_by_segment['Count'], marker_color='lightblue',
+                   text=clv_by_segment['Count'], textposition='auto'),
             secondary_y=False
         )
         
         fig.add_trace(
             go.Scatter(name="Avg CLV Score", x=clv_by_segment['Spending_Segment'], 
-                      y=clv_by_segment['mean'], marker_color='darkblue', mode='lines+markers'),
+                      y=clv_by_segment['Avg_CLV'], marker_color='darkblue', 
+                      mode='lines+markers+text',
+                      text=clv_by_segment['Avg_CLV'].round(0), textposition='top center'),
             secondary_y=True
         )
         
@@ -579,47 +349,110 @@ def customer_dashboard():
             hovermode='x unified'
         )
         
+        fig.update_yaxes(title_text="Number of Customers", secondary_y=False)
+        fig.update_yaxes(title_text="CLV Score", secondary_y=True)
+        
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col2:
         st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         
-        # Age distribution by education
+        # Income distribution by education
         if 'Age' in filtered.columns:
-            fig = px.violin(
-                filtered.dropna(subset=['Age']),
-                y='Age',
+            fig = px.box(
+                filtered,
+                y='Income',
                 x='Education',
-                box=True,
-                title="Age Distribution by Education Level",
+                title="Income Distribution by Education Level",
                 template="plotly_white",
-                color='Education'
+                color='Education',
+                points="outliers"
             )
             st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
+    # Spending Patterns Section
+    st.markdown("### 💳 Spending Patterns Analysis")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        
+        # Recency vs Spending
+        fig = px.scatter(
+            filtered,
+            x='Recency',
+            y='TotalSpent',
+            color='Spending_Segment',
+            size='Income',
+            hover_data=['Education', 'Marital_Status'],
+            title="Purchase Recency vs Total Spending",
+            template="plotly_white",
+            opacity=0.7
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        
+        # Campaign response analysis
+        if 'Response' in filtered.columns:
+            response_by_segment = filtered.groupby(['Spending_Segment', 'Response']).size().unstack(fill_value=0)
+            response_by_segment['Response_Rate'] = (response_by_segment[1] / response_by_segment.sum(axis=1) * 100)
+            
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=response_by_segment.index,
+                y=response_by_segment[0],
+                name='No Response',
+                marker_color='lightcoral'
+            ))
+            fig.add_trace(go.Bar(
+                x=response_by_segment.index,
+                y=response_by_segment[1],
+                name='Responded',
+                marker_color='lightgreen'
+            ))
+            
+            fig.update_layout(
+                title="Campaign Response by Spending Segment",
+                barmode='stack',
+                template="plotly_white",
+                xaxis_title="Spending Segment",
+                yaxis_title="Number of Customers"
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
     # Correlation Heatmap
-    st.markdown("### 🔗 Correlation Analysis")
+    st.markdown("### 🔗 Feature Correlation Analysis")
     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     
-    numeric_cols = filtered.select_dtypes(include=[np.number]).columns[:10]
+    numeric_cols = filtered.select_dtypes(include=[np.number]).columns[:12]
     if len(numeric_cols) > 1:
         corr_matrix = filtered[numeric_cols].corr()
         
-        fig = ff.create_annotated_heatmap(
+        # Create a more informative heatmap
+        fig = go.Figure(data=go.Heatmap(
             z=corr_matrix.values,
             x=list(corr_matrix.columns),
             y=list(corr_matrix.index),
-            annotation_text=corr_matrix.round(2).values,
+            text=corr_matrix.round(2).values,
+            texttemplate='%{text}',
+            textfont={"size": 10},
             colorscale='RdBu',
+            zmid=0,
             showscale=True
-        )
+        ))
         
         fig.update_layout(
             title="Feature Correlation Heatmap",
             template="plotly_white",
-            height=500
+            height=600,
+            width=800
         )
         
         st.plotly_chart(fig, use_container_width=True)
@@ -627,7 +460,11 @@ def customer_dashboard():
     
     # Download option
     st.markdown("### 📥 Export Analysis")
-    create_download_button(filtered, "customer_analysis.csv")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        create_download_button(filtered, "customer_analysis.csv", "📥 Download Filtered Data")
+    with col2:
+        st.metric("Filtered Records", len(filtered))
 
 # ------------------------------------------------------------
 # HOUSE SALES DASHBOARD - ENHANCED
@@ -683,16 +520,27 @@ def house_dashboard():
         
         with col2:
             condition = st.multiselect(
-                "⭐ Condition",
+                "⭐ Condition Rating",
                 sorted(df['condition'].unique()),
                 default=sorted(df['condition'].unique())
             )
         
         with col3:
-            waterfront = st.checkbox("🏖️ Waterfront Only", value=False)
+            year_built = st.slider(
+                "🏗️ Year Built",
+                int(df['yr_built'].min()),
+                int(df['yr_built'].max()),
+                (1950, 2015)
+            )
         
-        if st.button("🔄 Reset Filters", key="reset_house"):
-            st.rerun()
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            waterfront = st.checkbox("🏖️ Waterfront Only", value=False)
+        with col2:
+            renovated = st.checkbox("🔧 Renovated Only", value=False)
+        with col3:
+            if st.button("🔄 Reset Filters", key="reset_house"):
+                st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -702,15 +550,19 @@ def house_dashboard():
         (df['bedrooms'].isin(bedrooms)) &
         (df['bathrooms'].between(bathrooms[0], bathrooms[1])) &
         (df['sqft_living'].between(sqft_range[0], sqft_range[1])) &
-        (df['condition'].isin(condition))
+        (df['condition'].isin(condition)) &
+        (df['yr_built'].between(year_built[0], year_built[1]))
     ]
     
     if waterfront:
         filtered = filtered[filtered['waterfront'] == 1]
     
+    if renovated:
+        filtered = filtered[filtered['renovated'] == True]
+    
     # Market Overview KPIs
     st.markdown("### 📊 Market Overview")
-    metric_cols = st.columns(4)
+    metric_cols = st.columns(6)
     
     with metric_cols[0]:
         avg_price = filtered['price'].mean()
@@ -722,11 +574,19 @@ def house_dashboard():
     
     with metric_cols[2]:
         avg_price_sqft = filtered['price_per_sqft'].mean()
-        st.markdown(create_metric_card("Price per Sqft", avg_price_sqft, prefix="$"), unsafe_allow_html=True)
+        st.markdown(create_metric_card("Price/Sqft", avg_price_sqft, prefix="$"), unsafe_allow_html=True)
     
     with metric_cols[3]:
         total_listings = len(filtered)
         st.markdown(create_metric_card("Active Listings", total_listings), unsafe_allow_html=True)
+    
+    with metric_cols[4]:
+        avg_sqft = filtered['sqft_living'].mean()
+        st.markdown(create_metric_card("Avg Living Area", avg_sqft, suffix=" sqft"), unsafe_allow_html=True)
+    
+    with metric_cols[5]:
+        waterfront_count = filtered['waterfront'].sum()
+        st.markdown(create_metric_card("Waterfront Properties", waterfront_count), unsafe_allow_html=True)
     
     # Charts Section
     col1, col2 = st.columns(2)
@@ -734,7 +594,7 @@ def house_dashboard():
     with col1:
         st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         
-        # Price distribution with KDE
+        # Price distribution with statistics
         fig = px.histogram(
             filtered,
             x='price',
@@ -745,10 +605,14 @@ def house_dashboard():
             color_discrete_sequence=['#667eea']
         )
         
-        # Add median line
+        # Add statistical lines
         median_price = filtered['price'].median()
+        mean_price = filtered['price'].mean()
+        
         fig.add_vline(x=median_price, line_dash="dash", line_color="red", 
                      annotation_text=f"Median: ${median_price:,.0f}")
+        fig.add_vline(x=mean_price, line_dash="dash", line_color="green", 
+                     annotation_text=f"Mean: ${mean_price:,.0f}")
         
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -764,20 +628,22 @@ def house_dashboard():
             title="Price Distribution by Bedroom Count",
             template="plotly_white",
             color='bedrooms',
-            color_continuous_scale='Viridis'
+            color_continuous_scale='Viridis',
+            points="outliers"
         )
         
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
     # Price Trends
+    st.markdown("### 📈 Market Trends")
     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     
     # Monthly price trends
     monthly_prices = filtered.groupby('year_month').agg({
-        'price': ['mean', 'median', 'count']
+        'price': ['mean', 'median', 'count', 'std']
     }).reset_index()
-    monthly_prices.columns = ['year_month', 'avg_price', 'median_price', 'count']
+    monthly_prices.columns = ['year_month', 'avg_price', 'median_price', 'count', 'price_std']
     
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     
@@ -789,8 +655,15 @@ def house_dashboard():
     )
     
     fig.add_trace(
+        go.Scatter(x=monthly_prices['year_month'], y=monthly_prices['median_price'],
+                  name="Median Price", mode='lines+markers',
+                  line=dict(color='#764ba2', width=2, dash='dash')),
+        secondary_y=False
+    )
+    
+    fig.add_trace(
         go.Bar(x=monthly_prices['year_month'], y=monthly_prices['count'],
-               name="Number of Sales", marker_color='lightblue', opacity=0.5),
+               name="Sales Volume", marker_color='lightblue', opacity=0.4),
         secondary_y=True
     )
     
@@ -820,10 +693,11 @@ def house_dashboard():
             y='price',
             color='condition',
             size='sqft_lot',
-            hover_data=['bedrooms', 'bathrooms', 'waterfront'],
+            hover_data=['bedrooms', 'bathrooms', 'waterfront', 'age'],
             title="Price vs Living Area Analysis",
             template="plotly_white",
-            trendline="ols"
+            trendline="ols",
+            opacity=0.6
         )
         
         st.plotly_chart(fig, use_container_width=True)
@@ -832,19 +706,63 @@ def house_dashboard():
     with col2:
         st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         
-        # Feature importance for price (simple correlation)
-        correlations = df[['price', 'sqft_living', 'bedrooms', 'bathrooms', 'sqft_lot', 
-                          'floors', 'waterfront', 'view', 'condition', 'grade']].corr()['price'].sort_values()
+        # Feature importance for price
+        correlations = df[['price', 'sqft_living', 'sqft_lot', 'bedrooms', 'bathrooms', 
+                          'floors', 'waterfront', 'view', 'condition', 'grade', 
+                          'sqft_above', 'sqft_basement', 'age']].corr()['price'].sort_values()
+        
+        # Remove price itself
+        correlations = correlations[correlations.index != 'price']
         
         fig = px.bar(
-            x=correlations[1:].values,
-            y=correlations[1:].index,
+            x=correlations.values,
+            y=correlations.index,
             orientation='h',
-            title="Feature Correlation with Price",
+            title="Feature Correlation with House Price",
             labels={'x': 'Correlation Coefficient', 'y': 'Feature'},
-            color=correlations[1:].values,
+            color=correlations.values,
             color_continuous_scale='RdBu',
-            template="plotly_white"
+            template="plotly_white",
+            text=correlations.values.round(2)
+        )
+        fig.update_traces(textposition='outside')
+        
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Property Analysis
+    st.markdown("### 🏘️ Property Characteristics")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        
+        # Condition distribution
+        condition_counts = filtered['condition'].value_counts().sort_index()
+        
+        fig = px.pie(
+            values=condition_counts.values,
+            names=condition_counts.index,
+            title="Property Condition Distribution",
+            template="plotly_white",
+            hole=0.3
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        
+        # Price per sqft by number of floors
+        fig = px.box(
+            filtered,
+            x='floors',
+            y='price_per_sqft',
+            title="Price per Square Foot by Number of Floors",
+            template="plotly_white",
+            color='floors',
+            points="outliers"
         )
         
         st.plotly_chart(fig, use_container_width=True)
@@ -852,19 +770,20 @@ def house_dashboard():
     
     # Geographic Distribution
     if 'lat' in filtered.columns and 'long' in filtered.columns:
-        st.markdown("### 🗺️ Geographic Distribution")
+        st.markdown("### 🗺️ Geographic Price Distribution")
         st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         
         # Sample data for map performance
-        map_df = filtered.dropna(subset=['lat', 'long']).sample(min(2000, len(filtered)))
+        map_df = filtered.dropna(subset=['lat', 'long'])
+        if len(map_df) > 2000:
+            map_df = map_df.sample(2000)
         
-        # Color by price
         st.map(
             map_df,
             latitude='lat',
             longitude='long',
-            color='price',
-            size='sqft_living'
+            color=None,
+            size=None
         )
         
         st.markdown('</div>', unsafe_allow_html=True)
@@ -873,7 +792,7 @@ def house_dashboard():
     st.markdown("### 📥 Export Market Data")
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        create_download_button(filtered, "house_market_data.csv")
+        create_download_button(filtered, "house_market_data.csv", "📥 Download Filtered Data")
     with col2:
         st.metric("Filtered Listings", len(filtered))
     with col3:
@@ -889,23 +808,19 @@ def main():
     # Dashboard selection with icons and descriptions
     st.markdown("### Select Dashboard")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("🏅 Olympics History", use_container_width=True):
-            st.session_state['active_dashboard'] = 'olympics'
-    
-    with col2:
-        if st.button("🛍️ Customer Analytics", use_container_width=True):
+        if st.button("🛍️ Customer Analytics", use_container_width=True, key="btn_customer"):
             st.session_state['active_dashboard'] = 'customer'
     
-    with col3:
-        if st.button("🏡 Real Estate Market", use_container_width=True):
+    with col2:
+        if st.button("🏡 Real Estate Market", use_container_width=True, key="btn_houses"):
             st.session_state['active_dashboard'] = 'houses'
     
     # Initialize session state
     if 'active_dashboard' not in st.session_state:
-        st.session_state['active_dashboard'] = 'olympics'
+        st.session_state['active_dashboard'] = 'customer'
     
     # Sidebar navigation
     with st.sidebar:
@@ -914,13 +829,12 @@ def main():
         
         dashboard = st.radio(
             "Choose Dashboard",
-            ["🏅 Olympics History", "🛍️ Customer Analytics", "🏡 Real Estate Market"],
-            index=["olympics", "customer", "houses"].index(st.session_state['active_dashboard'])
+            ["🛍️ Customer Analytics", "🏡 Real Estate Market"],
+            index=0 if st.session_state['active_dashboard'] == 'customer' else 1
         )
         
         # Update session state based on radio selection
         dashboard_map = {
-            "🏅 Olympics History": "olympics",
             "🛍️ Customer Analytics": "customer",
             "🏡 Real Estate Market": "houses"
         }
@@ -930,9 +844,22 @@ def main():
         st.markdown("### 📊 About")
         st.info(
             "This advanced analytics dashboard provides deep insights into "
-            "Olympic history, customer behavior, and real estate markets. "
-            "Use the filters to explore the data and uncover patterns."
+            "customer behavior patterns and real estate market trends. "
+            "Use the interactive filters to explore the data and uncover valuable insights."
         )
+        
+        # Quick stats
+        st.markdown("---")
+        st.markdown("### 📈 Quick Stats")
+        
+        try:
+            customer_df = load_customer()
+            houses_df = load_houses()
+            
+            st.metric("Total Customers", f"{len(customer_df):,}")
+            st.metric("Total Properties", f"{len(houses_df):,}")
+        except:
+            pass
         
         # System info
         st.markdown("---")
@@ -941,9 +868,7 @@ def main():
         st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     
     # Render selected dashboard
-    if st.session_state['active_dashboard'] == 'olympics':
-        olympics_dashboard()
-    elif st.session_state['active_dashboard'] == 'customer':
+    if st.session_state['active_dashboard'] == 'customer':
         customer_dashboard()
     elif st.session_state['active_dashboard'] == 'houses':
         house_dashboard()
