@@ -1,2 +1,2 @@
 # powerbi-as-streamlit
-try to put powerbi dashboards on streamlit
+just a practice project - trying powerbi on streamlit
