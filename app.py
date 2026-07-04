@@ -6,9 +6,9 @@ from datetime import datetime
 
 st.set_page_config(layout="wide", page_title="Interactive Analytics")
 
-# ------------------------------------------------------------
+# 
 # Helper: IQR outlier removal
-# ------------------------------------------------------------
+# 
 def remove_outliers_iqr(df, column):
     Q1 = df[column].quantile(0.25)
     Q3 = df[column].quantile(0.75)
@@ -17,11 +17,11 @@ def remove_outliers_iqr(df, column):
     upper = Q3 + 1.5 * IQR
     return df[(df[column] >= lower) & (df[column] <= upper)]
 
-# ------------------------------------------------------------
+# 
 # CUSTOMER DASHBOARD
-# ------------------------------------------------------------
+# 
 def customer_dashboard():
-    st.title("🛍️ Customer Personality Analysis")
+    st.title(" Customer Personality Analysis")
 
     # ---- Load default data ----
     @st.cache_data
@@ -34,7 +34,7 @@ def customer_dashboard():
         return df
 
     # ---- Import custom CSV ----
-    with st.expander("📁 Import custom data (optional)"):
+    with st.expander(" Import custom data (optional)"):
         uploaded = st.file_uploader("Upload CSV with same structure as marketing_campaign.csv", type="csv", key="cust_upload")
         if uploaded:
             df = pd.read_csv(uploaded)
@@ -64,7 +64,7 @@ def customer_dashboard():
     c4.metric("Response Rate", f"{(filtered['Response']==1).mean()*100:.1f}%")
 
     # ---- Interactive Chart Builder ----
-    st.subheader("🔧 Build Your Own Chart")
+    st.subheader(" Build Your Own Chart")
     with st.container():
         col1,col2,col3 = st.columns(3)
         chart_type = col1.selectbox("Chart type", ["Scatter","Bar","Box","Histogram","Line"])
@@ -119,13 +119,13 @@ def customer_dashboard():
     st.plotly_chart(fig2, use_container_width=True)
 
     # ---- Export ----
-    st.download_button("📥 Download Filtered Data", filtered.to_csv(index=False), "customer_filtered.csv")
+    st.download_button(" Download Filtered Data", filtered.to_csv(index=False), "customer_filtered.csv")
 
-# ------------------------------------------------------------
+# 
 # HOUSE SALES DASHBOARD
-# ------------------------------------------------------------
+# 
 def house_dashboard():
-    st.title("🏡 House Sales Analysis")
+    st.title(" House Sales Analysis")
 
     @st.cache_data
     def get_default_houses():
@@ -137,7 +137,7 @@ def house_dashboard():
         return df
 
     # Import custom CSV
-    with st.expander("📁 Import custom data (optional)"):
+    with st.expander(" Import custom data (optional)"):
         uploaded = st.file_uploader("Upload CSV with same structure as kc_house_data.csv", type="csv", key="house_upload")
         if uploaded:
             df = pd.read_csv(uploaded)
@@ -167,7 +167,7 @@ def house_dashboard():
     k4.metric("Listings", f"{len(filtered):,}")
 
     # Interactive Chart Builder
-    st.subheader("🔧 Build Your Own Chart")
+    st.subheader(" Build Your Own Chart")
     with st.container():
         col1,col2,col3 = st.columns(3)
         chart_type = col1.selectbox("Chart type", ["Scatter","Bar","Box","Histogram","Line"])
@@ -214,20 +214,20 @@ def house_dashboard():
 
     # Map (fixed: explicitly pass lat/lon column names)
     if 'lat' in filtered.columns and 'long' in filtered.columns:
-        st.subheader("🗺️ Property Locations")
+        st.subheader(" Property Locations")
         map_data = filtered.dropna(subset=['lat','long']).sample(min(2000, len(filtered)))
         st.map(map_data, latitude='lat', longitude='long')   # ← corrected
 
     # Export
-    st.download_button("📥 Download Filtered Data", filtered.to_csv(index=False), "houses_filtered.csv")
+    st.download_button(" Download Filtered Data", filtered.to_csv(index=False), "houses_filtered.csv")
 
-# ------------------------------------------------------------
+# 
 # MAIN APP
-# ------------------------------------------------------------
+# 
 def main():
-    st.sidebar.title("📊 Analytics Hub")
-    page = st.sidebar.radio("Select Dashboard", ["🛍️ Customer Personality", "🏡 House Sales"])
-    if page == "🛍️ Customer Personality":
+    st.sidebar.title(" Analytics Hub")
+    page = st.sidebar.radio("Select Dashboard", [" Customer Personality", " House Sales"])
+    if page == " Customer Personality":
         customer_dashboard()
     else:
         house_dashboard()
