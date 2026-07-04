@@ -1,12 +1,12 @@
-# 📊 Power BI Style Dashboards in Streamlit
+#  Power BI Style Dashboards in Streamlit
 
 A practice project building interactive dashboards with **Streamlit** and **Plotly** that mimic Power BI functionality. No Power BI license required!
 
 Currently features two analytical views:
-- 🛍️ **Customer Personality Analysis** – explore customer demographics, spending habits, and campaign response.
-- 🏡 **House Sales Analysis** – investigate real estate trends, pricing, and property characteristics.
+-  **Customer Personality Analysis** – explore customer demographics, spending habits, and campaign response.
+-  **House Sales Analysis** – investigate real estate trends, pricing, and property characteristics.
 
-## ✨ Features
+##  Features
 
 - **Interactive Chart Builder** – choose chart type (scatter, bar, box, histogram, line), X/Y axes, color, and size.
 - **Dynamic Filters** – slice data by education, income, age, bedrooms, price range, etc.
@@ -15,7 +15,7 @@ Currently features two analytical views:
 - **KPI Metrics** – quick summary statistics at the top of each dashboard.
 - **Minimalist Design** – clean, straightforward UI focused on data exploration.
 
-## 📁 Data Sources
+##  Data Sources
 
 The app expects two CSV files in the same directory. You can also import your own files with the same column structure.
 
